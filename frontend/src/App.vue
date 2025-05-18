@@ -32,8 +32,8 @@
   // 导航项配置
   const navItems = ref([
     { title: '知识图谱管理', path: '/kg-management' },
-    { title: '建筑施工风险识别', path: '/risk-identification' },
-    { title: '隐患治理', path: '/hazard-control' },
+    { title: '安全风险与隐患识别', path: '/risk-identification' },
+    { title: '风险管控与隐患治理', path: '/hazard-control' },
     { title: '历史溯源与反馈', path: '/history-tracking' }
   ])
   </script>
