@@ -129,3 +129,7 @@ INSTALLED_APPS += ["corsheaders"]
 MIDDLEWARE     = ["corsheaders.middleware.CorsMiddleware", *MIDDLEWARE]
 CORS_ALLOW_ALL_ORIGINS = True      # 或按需要写白名单
 
+INSTALLED_APPS += [
+    'backend.hazard_control.apps.HazardControlConfig',
+]
+
