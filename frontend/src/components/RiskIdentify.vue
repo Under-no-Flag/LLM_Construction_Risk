@@ -17,10 +17,12 @@
                 </el-form-item>
             </el-form>
             <!-- 添加重新识别按钮 -->
-            <el-button type="primary" @click="handleSuccess" style="margin-left: 2rem">
+            <!-- 识别按钮 -->
+            <el-button type="primary" @click="identifyRisk" :disabled="!selectedFile || loading" style="margin-left: 2rem">
                 <el-icon>
                     <UploadFilled />
-                </el-icon>重新识别
+                </el-icon>
+                {{ loading ? '识别中…' : (resultData ? '重新识别' : '识别') }}
             </el-button>
             <!-- 初始提示 -->
         </div>
@@ -31,8 +33,7 @@
         <div class="main-content">
             <!-- 左侧上传区 -->
             <div class="upload-section">
-                <!-- 上传区域 -->
-                <el-upload class="tech-upload tiny" drag action="/api/upload_and_detect/" :show-file-list="false" :on-success="handleSuccess" :before-upload="beforeUpload" accept="image/*">
+                <el-upload ref="uploader" class="tech-upload tiny" drag :auto-upload="false" :on-change="handleFileChange" accept="image/*">
                     <div class="upload-area">
                         <div class="holographic-effect"></div>
                         <el-icon class="upload-icon">
@@ -45,7 +46,7 @@
                     </div>
                 </el-upload>
 
-                <!-- 结果图片 -->
+                <!-- 图片预览 -->
                 <div class="image-display">
                     <img :src="imageUrl || defaultImg" class="display-image" :class="{ placeholder: !imageUrl }" />
                 </div>
@@ -53,10 +54,10 @@
 
             <!-- 右侧结果区 -->
             <div class="result-section">
-                <!-- 加载状态 -->
+                <!-- 进度条 -->
                 <div v-if="loading" class="loading-box">
-                    <div class="radar-scan"></div>
-                    <p>AI风险分析中...</p>
+                    <el-progress :text-inside="true" :stroke-width="20" :percentage="progress" :status="progress < 100 ? 'active' : 'success'" style="width: 100%;" />
+                    <p style="margin-top: 1rem;">AI 风险分析中… (≈18 s)</p>
                 </div>
 
                 <!-- 分析结果 -->
@@ -90,37 +91,83 @@
                     </div>
 
                     <!-- 风险隐患提交按钮 -->
-                    <el-button type="primary" class="submit-button" @click="submitHazard">提交所识别的风险隐患</el-button>
+                    <el-button type="primary" class="submit-button" @click="openHazardDialog">提交所识别的风险隐患</el-button>
                 </div>
             </div>
         </div>
+        <!-- ===== 风险隐患提交 Dialog ===== -->
+        <el-dialog v-model="dialogVisible" title="提交风险隐患" width="800px" custom-class="hazard-dialog" :close-on-click-modal="false">
+            <el-form :model="hazardForm" label-width="110px" class="hazard-form">
+                <el-form-item label="标题">
+                    <el-input v-model="hazardForm.title" placeholder="请输入标题" />
+                </el-form-item>
+
+                <el-form-item label="风险信息">
+                    <el-input v-model="hazardForm.riskDescription" type="textarea" :rows="5" placeholder="请输入/修改风险描述" />
+                </el-form-item>
+
+                <el-form-item label="法规标准">
+                    <el-input v-model="hazardForm.regulations" type="textarea" :rows="6" placeholder="请输入/修改法规依据 (多条可换行分隔)" />
+                </el-form-item>
+
+                <el-form-item label="上传人">
+                    <el-input v-model="hazardForm.uploader" placeholder="请输入姓名" />
+                </el-form-item>
+
+                <el-form-item label="附件">
+                    <el-upload
+                        drag
+                        list-type="picture-card"
+                        :auto-upload="false"
+                        :file-list="fileList"
+                        :on-change="handleDialogFileChange"
+                        :on-remove="handleDialogFileRemove"
+                        multiple
+                        accept="image/*, application/pdf"
+                    >
+                        <el-icon>
+                            <UploadFilled />
+                        </el-icon>
+                        <template #tip>
+                            <div style="font-size:14px;color:#888;">默认已包含识别图片，可添加更多附件</div>
+                        </template>
+                    </el-upload>
+                </el-form-item>
+            </el-form>
+
+            <template #footer>
+                <el-button size="large" @click="dialogVisible = false">取消</el-button>
+                <el-button type="primary" size="large" @click="submitHazard">提交</el-button>
+            </template>
+        </el-dialog>
     </div>
 </template>
 
 <script setup>
 import { onMounted, ref } from 'vue'
 import { UploadFilled, WarningFilled, Document, Picture } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
-
+import { ElMessage,ElMessageBox  } from 'element-plus'
+import axios from 'axios'
 // 模拟数据
 const resultData = ref(null)
 const imageUrl = ref('')
 const loading = ref(false)
+const selectedFile = ref(null)
+const selectedModel = ref('')
+const progress = ref(0)
+let timer = null
 const defaultImg =
     'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjIwIiBoZWlnaHQ9IjIyMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMjIwIiBoZWlnaHQ9IjIyMCIgZmlsbD0iI2ZmZiIgZmlsbC1vcGFjaXR5PSIwLjA1Ii8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxNnB4IiBmaWxsPSIjY2NjIj5ObyBJbWFnZTwvdGV4dD48L3N2Zz4='
-const beforeUpload = (file) => {
-    console.log('file', file)
-    imageUrl.value = URL.createObjectURL(file)
+/* ------------- 文件选择 -------------- */
+const handleFileChange = (uploadFile) => {
+    const file = uploadFile.raw
     if (file.size > 10 * 1024 * 1024) {
-        ElMessage.error('图片大小不能超过10MB')
+        ElMessage.error('图片大小不能超过 10 MB')
         return false
     }
-
-    loading.value = false
-
-    return true
+    selectedFile.value = file
+    imageUrl.value = URL.createObjectURL(file)
 }
-const selectedModel = ref('')
 
 onMounted(() => {
     // 组件加载时的初始化操作
@@ -150,38 +197,116 @@ onMounted(() => {
     // imageUrl.value = '/src/statics/demo_images/1.png'
 })
 
-const handleSuccess = (response) => {
-    // 模拟API响应
+/* ------------- 识别按钮 -------------- */
+const identifyRisk = async () => {
+    if (!selectedFile.value) {
+        ElMessage.warning('请先选择图片')
+        return
+    }
+    if (!selectedModel.value) {
+        ElMessage.warning('请选择大模型')
+        return
+    }
 
-    // setTimeout(() => {
-    //     resultData.value = {
-    //         riskDescription: response.riskList, // 已经是数组
-    //         regulations: response.regulations, // 同样是数组
-    //     }
-    //     loading.value = false
-    // }, 10000)
+    // 重置状态
+    resultData.value = null
+    progress.value = 0
+    loading.value = true
 
-    resultData.value = {
-        riskDescription:
-            '图片中可以看到工人们都佩戴了安全帽，但没有看到其他防护装备如手套、护目镜等;工人在搬运重物时没有使用适当的工具或设备，增加了受伤的风险;施工现场显得非常混乱，材料堆放杂乱，通道不清晰，增加了安全隐患',
-        regulations: [
-            {
-                title: '中华人民共和国安全生产法',
-                code: 'JGJ 80-2016',
-                content:
-                    '第42条：生产经营单位必须为从业人员提供符合国家标准或者行业标准的劳动防护用品，并监督、教育从业人员按照使用规则佩戴、使用',
-            },
-            {
-                title: '建筑施工高处作业安全技术规范',
-                code: 'GB 50870-2013',
-                content: '第3.0.1条：施工现场应设置明显的安全标志和必要的安全防护设施',
-            },
-            {
-                title: '建筑施工安全检查标准',
-                code: 'JGJ59-2011',
-                content: '第3.18.3条：施工现场应保持整洁，材料堆放整齐，通道畅通',
-            },
-        ],
+    // 进度条模拟 —— 18 s
+    const totalMs = 18000
+    const start = Date.now()
+    timer = setInterval(() => {
+        const elapsed = Date.now() - start
+        // 最多到 95%，留 5% 给真正响应
+        progress.value = Math.min(95, Math.floor((elapsed / totalMs) * 100))
+    }, 200)
+
+    // 发送请求
+    try {
+        const form = new FormData()
+        form.append('image', selectedFile.value)
+        form.append('model', selectedModel.value)
+
+        const res = await axios.post('/api/upload_and_detect/', form)
+        console.log('识别结果：', res.data) // ✅ 能打印
+        const payload = res.data.data ?? res.data // 兼容两种格式
+        resultData.value = payload
+    } catch (err) {
+        console.error(err)
+        ElMessage.error('识别失败，请稍后重试')
+    } finally {
+        clearInterval(timer)
+        setTimeout(() => {
+            loading.value = false
+            progress.value = 0
+        }, 500)
+    }
+}
+
+/* ===== 隐患提交流程 ===== */
+const dialogVisible = ref(false)
+const hazardForm = reactive({
+    title: '',
+    riskDescription: '',
+    regulations: '',
+    uploader: '',
+})
+const fileList = ref([]) // el-upload 默认文件列表
+
+// 打开对话框，预填内容
+const openHazardDialog = () => {
+    if (!resultData.value) return
+    hazardForm.title = ''
+    hazardForm.riskDescription = resultData.value.riskDescription || ''
+    hazardForm.regulations = (resultData.value.regulations || []).map((r) => `《${r.title}》 ${r.content} (${r.code})`).join('\n')
+    hazardForm.uploader = ''
+
+    // 默认附件 = 上传图片
+    fileList.value = []
+    if (selectedFile.value) {
+        fileList.value.push({
+            name: selectedFile.value.name,
+            url: imageUrl.value,
+            raw: selectedFile.value,
+        })
+    }
+    dialogVisible.value = true
+}
+
+// el-upload change
+const handleDialogFileChange = (uploadFile, newList) => {
+    fileList.value = newList
+}
+const handleDialogFileRemove = (file, newList) => {
+    fileList.value = newList
+}
+
+const submitHazard = async () => {
+    if (!hazardForm.title) return ElMessage.warning('请填写标题')
+    if (!hazardForm.uploader) return ElMessage.warning('请填写上传人')
+
+    try {
+        const fd = new FormData()
+        fd.append('title', hazardForm.title)
+        fd.append('riskDescription', hazardForm.riskDescription)
+        fd.append('regulations', hazardForm.regulations)
+        fd.append('uploader', hazardForm.uploader)
+
+        // 附件
+        fileList.value.forEach((f) => {
+            if (f.raw) fd.append('files', f.raw)
+        })
+
+        await axios.post('/api/submit_hazard/', fd, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+        })
+
+        // ElMessageBox.alert('风险隐患已提交成功！', '提交成功', { type: 'success', center: true, confirmButtonText: '确定' })
+        dialogVisible.value = false
+    } catch (err) {
+        console.error(err)
+        ElMessage.error('提交失败，请稍后重试')
     }
 }
 </script>
@@ -426,9 +551,9 @@ const handleSuccess = (response) => {
 
 .upload-text {
     text-align: center;
-    padding: 20px;
-    margin: 15px 0;
-    border: 2px dashed #d9d9d9;
+    padding: 0px;
+    /* margin: 15px 0; */
+    border: 4px dashed #d9d9d9;
     border-radius: 8px;
     color: #131212;
     transition: border-color 0.3s ease;
@@ -462,15 +587,42 @@ const handleSuccess = (response) => {
 
 /* 提交按钮样式 */
 .submit-button {
-  margin-top: 1.5rem;
-  background-color: #00f3ff;
-  border-color: #00d4ff;
-  color: #0a0e17;
-  font-weight: 600;
-
+    margin-top: 1.5rem;
+    background-color: #00f3ff;
+    border-color: #00d4ff;
+    color: #0a0e17;
+    font-weight: 600;
 }
 .submit-button:hover {
-  filter: brightness(1.1);
-  text-align: center;
+    filter: brightness(1.1);
+    text-align: center;
+}
+.loading-box {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+.empty-tip {
+    text-align: center;
+    margin: 1rem 0;
+    color: #888;
+}
+.submit-button {
+    margin-top: 1.5rem;
+}
+
+.hazard-dialog .el-dialog__body {
+    font-size: 16px;
+}
+.hazard-dialog .el-form-item__label {
+    font-size: 16px;
+}
+.hazard-dialog .el-input__inner,
+.hazard-dialog textarea {
+    font-size: 16px;
+}
+.hazard-dialog .el-upload-list__item {
+    font-size: 14px;
 }
 </style>
