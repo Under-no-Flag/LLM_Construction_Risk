@@ -8,6 +8,15 @@ class Hazard(models.Model):
     regulations = models.JSONField("相关法规", default=list, blank=True)
     uploader = models.CharField("上传人", max_length=100)
     created_at = models.DateTimeField("创建时间", auto_now_add=True)
+    STATUS_CHOICES = [
+        ("待处理", "待处理"),
+        ("整改中", "整改中"),
+        ("已完成", "已完成"),
+    ]
+    status = models.CharField("状态", max_length=10,
+                              choices=STATUS_CHOICES,
+                              default="待处理")
+    updated_at = models.DateTimeField("更新时间", auto_now=True)
 
     def __str__(self):
         return self.title

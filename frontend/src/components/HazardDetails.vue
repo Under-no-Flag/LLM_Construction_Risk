@@ -52,7 +52,6 @@
             <div ref="cyContainer" class="cy-wrapper" />
         </el-card>
 
-        <!-- =============== 治理建议 =============== -->
         <el-card shadow="always" class="suggest-section">
             <template #header>
                 <el-icon>
@@ -69,104 +68,126 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 import cytoscape from 'cytoscape'
-import { WarningFilled, UserFilled, BellFilled, Search, Connection, EditPen, DataLine, Memo,VideoCamera } from '@element-plus/icons-vue'
+import { WarningFilled, UserFilled, BellFilled, Search, Connection, EditPen, DataLine, Memo, VideoCamera } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
+import axios from 'axios'
+
+// 从路由拿到 hazard id
+const route = useRoute()
+const hazardId = (route.params.id as string) || '1'
 
 // ---------------- 示例数据 ----------------
-const hazard = {
-    id: 1,
-    title: '施工点A存在施工安全隐患',
-    uploader: '张三',
-    riskDescription: '仅有 1 人戴安全帽，其余人员未佩戴;作业面在夜间、临边无任何防护栏杆或安全网;	未见系挂式安全带或水平生命线',
-    image: '/src/statics/demo_images/1.png',
-}
+// 响应式数据
+const hazard = ref({
+    id: 0,
+    title: '',
+    uploader: '',
+    riskDescription: '',
+    image: '',
+})
+const cyElements = ref<any[]>([])
+const suggestions = ref<string[]>([])
 
-const cyElements = [
-    // 风险节点
-    { data: { id: 'risk_helmet', label: '未佩戴安全帽' } },
-    { data: { id: 'risk_edge', label: '临边无防护' } },
-    { data: { id: 'risk_harness', label: '未系安全带' } },
+// const cyElements = [
+//     // 风险节点
+//     { data: { id: 'risk_helmet', label: '未佩戴安全帽' } },
+//     { data: { id: 'risk_edge', label: '临边无防护' } },
+//     { data: { id: 'risk_harness', label: '未系安全带' } },
 
-    // 措施节点
-    { data: { id: 'measure_helmet', label: '全员佩戴安全帽' } },
-    { data: { id: 'measure_edge', label: '设防护栏杆/安全网' } },
-    { data: { id: 'measure_harness', label: '系挂安全带+生命线' } },
+//     // 措施节点
+//     { data: { id: 'measure_helmet', label: '全员佩戴安全帽' } },
+//     { data: { id: 'measure_edge', label: '设防护栏杆/安全网' } },
+//     { data: { id: 'measure_harness', label: '系挂安全带+生命线' } },
 
-    // 法规节点
-    {
-        data: {
-            id: 'spec_59_hat',
-            label: 'JGJ59-2011 3.13.3(1)',
-        },
-    },
-    {
-        data: {
-            id: 'spec_80_edge',
-            label: 'JGJ80-2016 4.1.3',
-        },
-    },
-    {
-        data: {
-            id: 'spec_59_harness',
-            label: 'JGJ59-2011 3.13.3(3)',
-        },
-    },
+//     // 法规节点
+//     {
+//         data: {
+//             id: 'spec_59_hat',
+//             label: 'JGJ59-2011 3.13.3(1)',
+//         },
+//     },
+//     {
+//         data: {
+//             id: 'spec_80_edge',
+//             label: 'JGJ80-2016 4.1.3',
+//         },
+//     },
+//     {
+//         data: {
+//             id: 'spec_59_harness',
+//             label: 'JGJ59-2011 3.13.3(3)',
+//         },
+//     },
 
-    // 风险→措施 边
-    { data: { source: 'risk_helmet', target: 'measure_helmet', label: '治理' } },
-    { data: { source: 'risk_edge', target: 'measure_edge', label: '治理' } },
-    { data: { source: 'risk_harness', target: 'measure_harness', label: '治理' } },
-    // 措施→法规 边
-    { data: { source: 'measure_helmet', target: 'spec_59_hat', label: '依据' } },
-    { data: { source: 'measure_edge', target: 'spec_80_edge', label: '依据' } },
-    { data: { source: 'measure_harness', target: 'spec_59_harness', label: '依据' } },
-]
+//     // 风险→措施 边
+//     { data: { source: 'risk_helmet', target: 'measure_helmet', label: '治理' } },
+//     { data: { source: 'risk_edge', target: 'measure_edge', label: '治理' } },
+//     { data: { source: 'risk_harness', target: 'measure_harness', label: '治理' } },
+//     // 措施→法规 边
+//     { data: { source: 'measure_helmet', target: 'spec_59_hat', label: '依据' } },
+//     { data: { source: 'measure_edge', target: 'spec_80_edge', label: '依据' } },
+//     { data: { source: 'measure_harness', target: 'spec_59_harness', label: '依据' } },
+// ]
 
-const suggestions = ref([
-    '现场所有作业人员进入施工区域前必须正确佩戴合格安全帽，并由安全员现场巡查抽检。',
-    '在作业临边处安装 1.2 m 高双道防护栏杆，并加挂密目式安全网，夜间作业区加装照明。',
-    '设置水平生命线，高处作业人员全程系挂安全带并定期检查挂点牢固性。',
-    '以 JGJ59‑2011 3.13.3 与 JGJ80‑2016 4.1.3 为依据，完成整改后填写隐患关闭单并归档。',
-])
+// const suggestions = ref([
+//     '现场所有作业人员进入施工区域前必须正确佩戴合格安全帽，并由安全员现场巡查抽检。',
+//     '在作业临边处安装 1.2 m 高双道防护栏杆，并加挂密目式安全网，夜间作业区加装照明。',
+//     '设置水平生命线，高处作业人员全程系挂安全带并定期检查挂点牢固性。',
+//     '以 JGJ59‑2011 3.13.3 与 JGJ80‑2016 4.1.3 为依据，完成整改后填写隐患关闭单并归档。',
+// ])
 
 const cyContainer = ref<HTMLDivElement | null>(null)
 
-onMounted(() => {
-    if (cyContainer.value) {
-        cytoscape({
-            container: cyContainer.value,
-            elements: cyElements,
-            layout: { name: 'cose', animate: true },
-            style: [
-                {
-                    selector: 'node',
-                    style: {
-                        'background-color': '#00d4ff',
-                        label: 'data(label)',
-                        color: '#ffffff',
-                        'font-size': '12px',
-                        'text-valign': 'center',
-                        'text-outline-color': '#0a0e17',
-                        'text-outline-width': 2,
+onMounted(async () => {
+    try {
+        const res = await axios.get(`/api/hazard/${hazardId}/`)
+        // 解构后端 JSON
+        hazard.value = res.data.hazard
+        cyElements.value = res.data.graph
+        suggestions.value = res.data.suggestions
+
+        // 初始化 Cytoscape
+        if (cyElements.value.length && cyContainer.value) {
+            cytoscape({
+                container: cyContainer.value,
+                elements: cyElements.value,
+                layout: { name: 'cose', animate: true },
+                style: [
+                    {
+                        selector: 'node',
+                        style: {
+                            'background-color': '#00d4ff',
+                            label: 'data(label)',
+                            color: '#ffffff',
+                            'font-size': '12px',
+                            'text-valign': 'center',
+                            'text-outline-color': '#0a0e17',
+                            'text-outline-width': 2,
+                        },
                     },
-                },
-                {
-                    selector: 'edge',
-                    style: {
-                        width: 2,
-                        'line-color': '#ffffff',
-                        'target-arrow-color': '#ffffff',
-                        'target-arrow-shape': 'triangle',
-                        label: 'data(label)',
-                        'font-size': '10px',
-                        color: '#00f3ff',
+                    {
+                        selector: 'edge',
+                        style: {
+                            width: 2,
+                            'line-color': '#ffffff',
+                            'target-arrow-color': '#ffffff',
+                            'target-arrow-shape': 'triangle',
+                            label: 'data(label)',
+                            'font-size': '10px',
+                            color: '#00f3ff',
+                        },
                     },
-                },
-            ],
-        })
+                ],
+            })
+        }
+
+        ElMessage.success('数据加载完成')
+    } catch (e) {
+        console.error(e)
+        ElMessage.error('从服务器加载隐患详情失败')
     }
-    ElMessage.success('知识图谱检索完成，已生成治理意见')
 })
 </script>
 

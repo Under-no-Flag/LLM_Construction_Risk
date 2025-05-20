@@ -18,12 +18,14 @@ from django.urls import path
 from django.conf import settings
 from django.conf.urls.static import static
 from backend.llms.views import upload_and_detect
-from backend.hazard_control.views import submit_hazard
+from backend.hazard_control.views import submit_hazard,hazard_detail,hazard_list
 
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/upload_and_detect/", upload_and_detect, name="api-upload"),
     path("api/submit_hazard/", submit_hazard, name="submit-hazard"),
+    path('hazard/<int:pk>/', hazard_detail,name='hazard-detail'),
+    path("api/hazards/", hazard_list),
 ]
 
 # 让 runserver 能直接回媒体文件（生产请交给 Nginx）
