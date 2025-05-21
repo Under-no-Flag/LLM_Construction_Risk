@@ -28,6 +28,8 @@ urlpatterns = [
     path("api/hazards/", hazard_list),
 ]
 
+
+
 # 让 runserver 能直接回媒体文件（生产请交给 Nginx）
 urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 
