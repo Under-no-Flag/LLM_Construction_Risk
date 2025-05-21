@@ -24,7 +24,7 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/upload_and_detect/", upload_and_detect, name="api-upload"),
     path("api/submit_hazard/", submit_hazard, name="submit-hazard"),
-    path('hazard/<int:pk>/', hazard_detail,name='hazard-detail'),
+    path('api/hazard/<int:pk>/', hazard_detail,name='hazard-detail'),
     path("api/hazards/", hazard_list),
 ]
 

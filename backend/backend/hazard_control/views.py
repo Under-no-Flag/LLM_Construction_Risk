@@ -127,9 +127,10 @@ def hazard_list(request):
             "id": h.id,
             "title": h.title,
             "uploader": h.uploader,
+            "description": h.risk_description,
             # 假设你模型里有个 status 字段，或你可以动态计算
             # "status": h.status,
-            "status": "未处理",
+            "status": h.status,
             "updatedAt": h.updated_at.strftime("%Y-%m-%d %H:%M"),
         })
     return JsonResponse({"data": data})

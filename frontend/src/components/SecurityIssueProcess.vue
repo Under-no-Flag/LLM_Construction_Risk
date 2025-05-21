@@ -37,12 +37,17 @@
         <el-table :data="filteredList" stripe highlight-current-row class="hazard-table">
             <el-table-column type="index" label="#" width="60" />
 
-            <el-table-column prop="title" label="标题" min-width="220">
+            <el-table-column prop="title" label="标题" min-width="80">
                 <template #default="scope">
                     <el-icon>
                         <Warning />
                     </el-icon>
                     <span>{{ scope.row.title }}</span>
+                </template>
+            </el-table-column>
+            <el-table-column prop="description" label="隐患描述" min-width="250">
+                <template #default="scope">
+                    <span>{{ scope.row.description }}</span>
                 </template>
             </el-table-column>
 
@@ -114,6 +119,7 @@ import { ElMessage } from 'element-plus'
 interface HazardItem {
     id: number
     title: string
+    description: string
     uploader: string
     status: '待处理' | '整改中' | '已完成'
     updatedAt: string
@@ -147,8 +153,8 @@ function goDetail(row: HazardItem) {
     router.push({ name: 'hazard-process', params: { id: row.id } })
 }
 function downloadAttachment(row: HazardItem) {
-  // 如果后端有附件下载 URL，可以直接 window.open
-  window.open(`/api/hazard/${row.id}/attachments/`)
+    // 如果后端有附件下载 URL，可以直接 window.open
+    window.open(`/api/hazard/${row.id}/attachments/`)
 }
 function editHazard(row: HazardItem) {
     router.push({ name: 'hazard-process', params: { id: row.id } })
@@ -165,13 +171,13 @@ function deleteHazard(row: HazardItem) {
 
 // —— 页面挂载后从后端拉列表 ——
 onMounted(async () => {
-  try {
-    const resp = await axios.get("/api/hazards/")
-    hazardList.value = resp.data.data
-  } catch (e) {
-    console.error(e)
-    ElMessage.error("加载隐患列表失败")
-  }
+    try {
+        const resp = await axios.get('/api/hazards/')
+        hazardList.value = resp.data.data
+    } catch (e) {
+        console.error(e)
+        ElMessage.error('加载隐患列表失败')
+    }
 })
 </script>
 
