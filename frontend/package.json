@@ -9,14 +9,13 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@element-plus/icons-vue": "^2.3.1",
-    "axios": "^0.27.2",
-    "cytoscape": "^3.32.0",
+    "@element-plus/icons-vue": "^2.1.0",
+    "axios": "^1.9.0",
+    "cytoscape": "^3.23.0",
     "element-plus": "^2.9.7",
-    "vis-data": "^7.1.9",
-    "vis-network": "^9.1.9",
-    "vue": "^3.5.13",
-    "vue-cytoscape": "^1.0.8",
+    "neovis.js": "^2.1.0",
+    "vue": "^3.5.14",
+    "vue-cytoscape": "^1.0.7",
     "vue-router": "^4.5.0"
   },
   "devDependencies": {
