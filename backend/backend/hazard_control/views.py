@@ -4,7 +4,8 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from .models import Hazard, Attachment
 import json
-
+from django.views.decorators.http import require_http_methods
+from backend.hazard_control.kg_service import kg_service
 
 @csrf_exempt
 def submit_hazard(request):
@@ -54,54 +55,24 @@ def hazard_detail(request, pk):
     if att:
         img_url = request.build_absolute_uri(att.file.url)
     # 3. 子图 & 建议：实际中可能存到另一个表，这里示例硬编码或从模型拿
-    graph = [
-        { 'data': { 'id': 'risk_helmet', 'label': '未佩戴安全帽' } },
-        { 'data': { 'id': 'risk_edge', 'label': '临边无防护' } },
-        { 'data': { 'id': 'risk_harness', 'label': '未系安全带' } },
-
-        # 措施节点
-        { 'data': { 'id': 'measure_helmet', 'label': '全员佩戴安全帽' } },
-        { 'data': { 'id': 'measure_edge', 'label': '设防护栏杆/安全网' } },
-        { 'data': { 'id': 'measure_harness', 'label': '系挂安全带+生命线' } },
-
-        # // 法规节点
-        {
-            'data': {
-                'id': 'spec_59_hat',
-                'label': 'JGJ59-2011 3.13.3(1)',
-            },
-        },
-        {
-            'data': {
-                'id': 'spec_80_edge',
-                'label': 'JGJ80-2016 4.1.3',
-            },
-        },
-        {
-            'data': {
-                'id': 'spec_59_harness',
-                'label': 'JGJ59-2011 3.13.3(3)',
-            },
-        },
-
-        # // 风险→措施 边
-        { 'data': { 'source': 'risk_helmet', 'target': 'measure_helmet', 'label': '治理' } },
-        { 'data': { 'source': 'risk_edge', 'target': 'measure_edge', 'label': '治理' } },
-        { 'data': { 'source': 'risk_harness', 'target': 'measure_harness', 'label': '治理' } },
-        # // 措施→法规 边
-        { 'data': { 'source': 'measure_helmet', 'target': 'spec_59_hat', 'label': '依据' } },
-        { 'data': { 'source': 'measure_edge', 'target': 'spec_80_edge', 'label': '依据' } },
-        { 'data': { 'source': 'measure_harness', 'target': 'spec_59_harness', 'label': '依据' } },
-    ]
+    # try:
+    #     graph = kg_service.query_graph(
+    #         f"施工现场的风险隐患描述为：{hazard.risk_description}。根据风险隐患描述,拆分隐患描述中各类要素。查找各要素对应有关的法律法规、建筑施工标准和事故报告 。"
+    #     )
+    #     print(graph)
+    # except Exception as e:
+    #     graph = []
+    #     print(f"知识图谱生成异常: {str(e)}")
 
 
-    suggestions = [
-        # … 从 DB 或按关联逻辑生成 …
-        '现场所有作业人员进入施工区域前必须正确佩戴合格安全帽，并由安全员现场巡查抽检。',
-        '在作业临边处安装 1.2 m 高双道防护栏杆，并加挂密目式安全网，夜间作业区加装照明。',
-        '设置水平生命线，高处作业人员全程系挂安全带并定期检查挂点牢固性。',
-        '以 JGJ59‑2011 3.13.3 与 JGJ80‑2016 4.1.3 为依据，完成整改后填写隐患关闭单并归档。',
-    ]
+    # suggestions = [
+    #     # … 从 DB 或按关联逻辑生成 …
+    #     '现场所有作业人员进入施工区域前必须正确佩戴合格安全帽，并由安全员现场巡查抽检。',
+    #     '在作业临边处安装 1.2 m 高双道防护栏杆，并加挂密目式安全网，夜间作业区加装照明。',
+    #     '设置水平生命线，高处作业人员全程系挂安全带并定期检查挂点牢固性。',
+    #     '以 JGJ59‑2011 3.13.3 与 JGJ80‑2016 4.1.3 为依据，完成整改后填写隐患关闭单并归档。',
+    # ]
+    suggestions=[]
 
     return JsonResponse({
         "hazard": {
@@ -111,7 +82,7 @@ def hazard_detail(request, pk):
             "riskDescription": hazard.risk_description,
             "image": img_url,
         },
-        "graph": graph,
+        "graph": None,
         "suggestions": suggestions,
     })
 
@@ -134,5 +105,46 @@ def hazard_list(request):
             "updatedAt": h.updated_at.strftime("%Y-%m-%d %H:%M"),
         })
     return JsonResponse({"data": data})
+
+from backend.llms.query_kg import query_kg_for_suggestion   # ← 刚写好的函数
+
+# 新视图
+@csrf_exempt
+@require_http_methods(["POST"])
+def generate_hazard_suggestion(request, pk: int):
+    """
+    根据 hazard.risk_description 调用 LLM+KG 生成治理意见
+    """
+    try:
+        hazard = Hazard.objects.get(pk=pk)
+    except Hazard.DoesNotExist:
+        return JsonResponse({"error": "Hazard not found"}, status=404)
+
+    suggestions = query_kg_for_suggestion(hazard.risk_description)
+    return JsonResponse({"suggestions": suggestions["suggestions"]})
+
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def retrieve_subgraph(request, pk: int):
+    try:
+        hazard = Hazard.objects.get(pk=pk)
+    except Hazard.DoesNotExist:
+        return JsonResponse({"error": "Hazard not found"}, status=404)
+    try:
+        graph = kg_service.query_graph(
+            # f"施工现场的风险隐患描述为：{hazard.risk_description} 根据风险隐患描述,拆分隐患描述中各要素。各要素对应有关的法律法规、建筑施工标准和事故报告有哪些？。"
+            f"施工现场的风险隐患描述为：{hazard.risk_description} 根据风险隐患描述、相关安全法规、事故报告、建筑施工标准和条例，指出违反了哪些法律法规和标准？"
+        )
+        print(graph)
+    except Exception as e:
+        graph = []
+        print(f"知识图谱生成异常: {str(e)}")
+
+
+    return JsonResponse({"graph": graph})
+
+
 
 

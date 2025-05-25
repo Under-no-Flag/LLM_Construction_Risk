@@ -5,8 +5,9 @@ class Neo4jDriver:
         self.uri = "bolt://127.0.0.1:7687"
         self.user = "neo4j"
         self.password = "Neo4j@0407"
-        self.driver = GraphDatabase.driver(self.uri, auth=(self.user, self.password))
-    
+        self.database = "vectorKG"
+        self.driver = GraphDatabase.driver(self.uri, auth=(self.user, self.password), database=self.database)
+
     def get_session(self):
         return self.driver.session()
 

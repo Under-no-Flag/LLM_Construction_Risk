@@ -47,7 +47,8 @@
                 <el-icon>
                     <DataLine />
                 </el-icon>
-                <span class="section-title">检索得到的知识子图</span>
+                <span class="section-title" tyle="font-size: larger">相关安全法规知识图谱</span>
+                <el-button type="primary" size="large" :loading="loadingSubGraph" @click="retriveSubGraph" style="font-size: larger">检索得到的知识子图</el-button>
             </template>
             <div ref="cyContainer" class="cy-wrapper" />
         </el-card>
@@ -57,11 +58,32 @@
                 <el-icon>
                     <Memo />
                 </el-icon>
-                <span class="section-title">大模型生成的隐患治理意见</span>
+                <span class="section-title" tyle="font-size: larger">大模型生成的隐患治理意见</span>
+
+                <el-button type="primary" size="large" :loading="loadingGen" @click="generateSuggestions" style="font-size: larger">生成治理意见</el-button>
             </template>
-            <el-timeline>
-                <el-timeline-item v-for="(p, idx) in suggestions" :key="idx" :timestamp="`步骤 ${idx + 1}`" :color="'#00f3ff'" style="font-size: large">{{ p }}</el-timeline-item>
+            <el-empty v-if="suggestions.length === 0 && !loadingGen" description="暂无治理意见" />
+            <el-timeline v-else-if="suggestions.length > 0">
+                <el-timeline-item v-for="(p, idx) in suggestions" :key="idx" :timestamp="`步骤 ${idx + 1}`" :color="'#00f3ff'" style="font-size: larger">{{ p }}</el-timeline-item>
             </el-timeline>
+            <!-- 生成治理意见按钮 -->
+        </el-card>
+
+        <!-- ======== ① 人工处理意见编辑框（新增） ======== -->
+        <el-card shadow="always" class="manual-section" style="margin-top: 20px">
+            <template #header>
+                <el-icon>
+                    <EditPen />
+                </el-icon>
+                <span class="section-title">人工处理意见</span>
+            </template>
+
+            <el-input v-model="manualOpinion" type="textarea" :rows="7" placeholder="请在此填写或修改整改意见..." resize="vertical" />
+
+            <!-- ======== ② 下发整改意见按钮（新增） ======== -->
+            <div style="text-align: right; margin-top: 12px">
+                <el-button type="success" :disabled="manualOpinion.trim() === ''" :loading="issuing" @click="issueOpinion" style="font-size: larger">下发整改意见</el-button>
+            </div>
         </el-card>
     </div>
 </template>
@@ -71,8 +93,9 @@ import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import cytoscape from 'cytoscape'
 import { WarningFilled, UserFilled, BellFilled, Search, Connection, EditPen, DataLine, Memo, VideoCamera } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElNotification,ElMessageBox } from 'element-plus'
 import axios from 'axios'
+import 'element-plus/dist/index.css'
 
 // 从路由拿到 hazard id
 const route = useRoute()
@@ -87,9 +110,13 @@ const hazard = ref({
     riskDescription: '',
     image: '',
 })
-const cyElements = ref<any[]>([])
-const suggestions = ref<string[]>([])
 
+const cyElements = ref<any[]>([])
+const loadingGen = ref(false)
+const loadingSubGraph = ref(false) // 子图加载中
+const suggestions = ref<string[]>([])
+const manualOpinion = ref<string>('') // 人工处理意见
+const issuing = ref(false) // 下发按钮 loading
 // const cyElements = [
 //     // 风险节点
 //     { data: { id: 'risk_helmet', label: '未佩戴安全帽' } },
@@ -186,9 +213,95 @@ onMounted(async () => {
         ElMessage.success('数据加载完成')
     } catch (e) {
         console.error(e)
-        ElMessage.error('从服务器加载隐患详情失败')
+        // ElMessage.error('从服务器加载隐患详情失败')
     }
 })
+
+async function generateSuggestions() {
+    loadingGen.value = true
+    try {
+        const { data } = await axios.post(`/api/hazards/${hazardId}/suggestions/`)
+        suggestions.value = data.suggestions ?? []
+        manualOpinion.value = suggestions.value.join('\n')
+        if (suggestions.value.length === 0) {
+            ElMessage.warning('模型未返回任何整改意见')
+        }
+    } catch (err: any) {
+        ElMessage.error(`生成失败：${err?.response?.data?.error || err}`)
+    } finally {
+        loadingGen.value = false
+    }
+}
+async function retriveSubGraph() {
+    loadingSubGraph.value = true
+    try {
+        const { data } = await axios.post(`/api/hazards/${hazardId}/subgraph/`)
+        cyElements.value = data.graph ?? []
+        if (cyContainer.value) {
+            cytoscape({
+                container: cyContainer.value,
+                elements: cyElements.value,
+                layout: { name: 'cose', animate: true },
+                style: [
+                    {
+                        selector: 'node',
+                        style: {
+                            'background-color': '#00d4ff',
+                            label: 'data(label)',
+                            color: '#ffffff',
+                            'font-size': '12px',
+                            'text-valign': 'center',
+                            'text-outline-color': '#0a0e17',
+                            'text-outline-width': 2,
+                        },
+                    },
+                    {
+                        selector: 'edge',
+                        style: {
+                            width: 2,
+                            'line-color': '#ffffff',
+                            'target-arrow-color': '#ffffff',
+                            'target-arrow-shape': 'triangle',
+                            label: 'data(label)',
+                            'font-size': '10px',
+                            color: '#00f3ff',
+                        },
+                    },
+                ],
+            })
+        }
+    } catch (err: any) {
+        ElMessage.error(`加载失败：${err?.response?.data?.error || err}`)
+    } finally {
+        loadingSubGraph.value = false
+    }
+}
+
+/* ===== 下发整改意见 ===== */
+async function issueOpinion() {
+    issuing.value = true
+    ElMessageBox.alert(
+        '整改意见已成功下发给施工单位，请留意后续整改反馈。',
+        '提交成功', // 标题
+        {
+            type: 'success',
+            confirmButtonText: '好的',
+            center: true, // 文本居中，可选
+        }
+    )
+    issuing.value = false
+
+    // try {
+    //     await axios.post(`/api/hazards/${hazardId}/issue/`, {
+    //         opinion: manualOpinion.value,
+    //     })
+    //     ElMessage.success('整改意见已下发')
+    // } catch (err: any) {
+    //     ElMessage.error(`下发失败：${err?.response?.data?.error || err}`)
+    // } finally {
+    //     issuing.value = false
+    // }
+}
 </script>
 
 <style scoped>

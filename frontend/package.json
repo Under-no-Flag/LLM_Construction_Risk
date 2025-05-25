@@ -12,6 +12,7 @@
     "@element-plus/icons-vue": "^2.1.0",
     "axios": "^1.9.0",
     "cytoscape": "^3.23.0",
+    "cytoscape-cose-bilkent": "^4.1.0",
     "element-plus": "^2.9.7",
     "neovis.js": "^2.1.0",
     "vue": "^3.5.14",

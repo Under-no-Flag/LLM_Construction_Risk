@@ -11,7 +11,7 @@ https://docs.djangoproject.com/en/4.0/ref/settings/
 """
 
 from pathlib import Path
-
+import os
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -131,5 +131,12 @@ CORS_ALLOW_ALL_ORIGINS = True      # 或按需要写白名单
 
 INSTALLED_APPS += [
     'backend.hazard_control.apps.HazardControlConfig',
+    "backend.llms.apps.llmsConfig",
 ]
+
+# backend/settings.py
+NEO4J_URI  = os.getenv("NEO4J_URI",  "bolt://localhost:7687")
+NEO4J_USER = os.getenv("NEO4J_USER", "neo4j")
+NEO4J_PASS = os.getenv("NEO4J_PASS", "Neo4j@0407")
+
 
