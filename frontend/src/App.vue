@@ -1,42 +1,44 @@
+[file name]: App.vue
+[file content begin]
 <template>
-    <div class="app-container">
-      <!-- 顶部导航栏 -->
-      <nav class="main-nav">
-        <ul class="nav-list">
-          <li v-for="(item, index) in navItems" :key="index" class="nav-item">
-            <router-link
-              :to="item.path"
-              class="nav-link"
-              active-class="active"
-            >
-              {{ item.title }}
-            </router-link>
-          </li>
-        </ul>
-      </nav>
+  <div class="app-container">
+    <!-- 顶部导航栏 -->
+    <nav class="main-nav">
+      <ul class="nav-list">
+        <li v-for="(item, index) in navItems" :key="index" class="nav-item">
+          <router-link
+            :to="item.path"
+            class="nav-link"
+            active-class="active"
+          >
+            {{ item.title }}
+          </router-link>
+        </li>
+      </ul>
+    </nav>
 
-      <!-- 页面内容 -->
-      <main class="content-area">
-        <router-view v-slot="{ Component }">
-          <transition name="fade" mode="out-in">
-            <component :is="Component" />
-          </transition>
-        </router-view>
-      </main>
-    </div>
-  </template>
+    <!-- 页面内容 -->
+    <main class="content-area">
+      <router-view v-slot="{ Component }">
+        <transition name="fade" mode="out-in">
+          <component :is="Component" />
+        </transition>
+      </router-view>
+    </main>
+  </div>
+</template>
 
-  <script setup>
-  import { ref } from 'vue'
+<script setup>
+import { ref } from 'vue'
 
-  // 导航项配置
-  const navItems = ref([
-    { title: '知识图谱管理', path: '/kg-management' },
-    { title: '安全风险与隐患识别', path: '/risk-identification' },
-    { title: '风险管控与隐患治理', path: '/hazard-control' },
-    { title: '历史溯源与反馈', path: '/history-tracking' }
-  ])
-  </script>
+const navItems = ref([
+  { title: '首页', path: '/' },  // 新增首页导航项
+  { title: '知识图谱管理', path: '/kg-management' },
+  { title: '安全风险与隐患识别', path: '/risk-identification' },
+  { title: '风险管控与隐患治理', path: '/hazard-control' },
+  { title: '历史溯源与反馈', path: '/history-tracking' }
+])
+</script>
 
   <style scoped>
   .app-container {

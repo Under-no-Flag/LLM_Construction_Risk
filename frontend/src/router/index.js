@@ -1,19 +1,22 @@
-
 import { createRouter, createWebHistory } from 'vue-router'
 
-// 确保所有页面组件已正确导入
 const routes = [
+  // 新增主页路由
   {
     path: '/',
-    redirect: '/kg-management'
+    name: 'Home',
+    component: () => import('@/Home.vue') // 使用懒加载
   },
+  // 保留原有路由配置
   {
     path: '/kg-management',
-    component: () => import('@/components/KGManage.vue') // 推荐使用懒加载
+    name: 'KGManagement',
+    component: () => import('@/components/KG2.vue')
   },
   {
     path: '/risk-identification',
-    component: () => import('@/components/RiskIdentify.vue') //
+    name: 'RiskIdentification',
+    component: () => import('@/components/RiskIdentify.vue')
   },
   {
     path: '/hazard-control',
@@ -29,7 +32,17 @@ const routes = [
     path:'/history-tracking',
     component: () => import('@/components/HistoryFeedback.vue'), //
   }
-  // 其他路由配置保持相同结构
+  // 补充缺失的两个路由
+  // {
+  //   path: '/hazard-control',
+  //   name: 'HazardControl',
+  //   component: () => import('@/components/HazardControl.vue')
+  // },
+  // {
+  //   path: '/history-tracking',
+  //   name: 'HistoryTracking',
+  //   component: () => import('@/components/HistoryTracking.vue')
+  // }
 ]
 
 const router = createRouter({
